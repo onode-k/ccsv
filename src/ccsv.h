@@ -1,17 +1,17 @@
-#ifndef CCSV_H
-#define CCSV_H
+#ifndef CCSV
+#define CCSV
 
 #define DEFAULT_LINE_SIZE 2048
 #define DEFAULT_WORD_SIZE 50
-#define DEFAULT_COLUMN_NUM 10
+#define DEFAULT_COLUMN_NUM 50
 #define DEFAULT_ROW_NUM 50
 
 #define DEBUG /* FIXME */
 
 typedef struct _csv_struct {
     char ***data;
-    unsigned int rows;
-    unsigned int columns;
+    int rows;
+    int columns;
 } CsvStruct;
 
 #ifdef DEBUG
@@ -24,6 +24,6 @@ int initialize_CsvStruct(CsvStruct *csv);
 
 void csv_read(char *filename, CsvStruct *csv);
 
-char **tokenizer(char *line, unsigned int *cols);
+char **tokenizer(char *line, int *cols);
 
 #endif
