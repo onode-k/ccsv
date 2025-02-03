@@ -93,17 +93,17 @@ void csv_read(char *filename, CsvStruct *csv)
 
     int rows = 0;
     int row_index;
+    size_t word_num;
+    int row_thresh = DEFAULT_ROW_NUM;
     while (fgets(line_buffer, DEFAULT_LINE_SIZE, input_file) != NULL) {
         ++rows;
-        size_t word_num = strlen(line_buffer);      /* 改行文字を含みヌル文字を含まない文字数 */
+        word_num = strlen(line_buffer);      /* 改行文字を含みヌル文字を含まない文字数 */
         int line_break_pos = word_num - 1; /* 改行文字のインデックスを取得 */
         if ((line_buffer[line_break_pos] != '\n') && (!feof(input_file))) {
-            printf("debug2\n");
-            printf("before realloc strlen:%d\n", strlen(line_buffer));
             /* バッファが溢れた場合拡張を行う */
             while (1) {
-                printf("new_buffer_size: %ld\n", (word_num + 1 + DEFAULT_LINE_SIZE));
-                char *tmp = (char*)realloc(line_buffer, (word_num + 1 + DEFAULT_LINE_SIZE)); /* 現在のバッファサイズからDEFAULT_LINE_SIZE分足し込む */
+                DEBUG_PRINT("strlen(line_buffer): %ld line_buffer: %s\n", strlen(line_buffer), line_buffer);
+                char *tmp = (char*)realloc(line_buffer, (word_num + 1 + DEFAULT_LINE_SIZE)); /* 現在のバッファサイズからDEFAULT_LINE_SIZE分足し込む(ヌル文字分+1) */
                 if (tmp == NULL) {
                     free(line_buffer);
                     line_buffer = NULL;
@@ -113,31 +113,37 @@ void csv_read(char *filename, CsvStruct *csv)
                 line_buffer = tmp;
                 int insert_index = strlen(line_buffer);
                 fgets(line_buffer+insert_index, DEFAULT_LINE_SIZE, input_file);
-                printf("after realloc strlen:%d\n", strlen(line_buffer));
                 // printf("line_buffer: %s\n", line_buffer);
                 if ((line_buffer[strlen(line_buffer)-1] == '\n') || (feof(input_file))) {
-                    printf("break\n");
                     break;
                 }
+                word_num = strlen(line_buffer);
             }
         }
+        DEBUG_PRINT("line data: %s\n", line_buffer);
         tokenized_line = tokenizer(line_buffer, &cols);
-        printf("debug4\n");
         if (tokenized_line == NULL) {
             memory_free_csv_struct(csv);
             break;
         }
         /* csv_structに格納していく */
-        if (rows >= DEFAULT_ROW_NUM) {
+        if (rows >= row_thresh) {
+            DEBUG_PRINT("occured memory reallocation for `csv->data`. rows:%d thresh: %d\n", rows, row_thresh);
             char ***tmp = (char ***)realloc(csv->data, sizeof(char **) * (rows + DEFAULT_ROW_NUM));
             if (tmp == NULL) {
                 memory_free_csv_struct(csv);
                 return;
             }
             csv->data = tmp;
+            row_thresh = rows + DEFAULT_COLUMN_NUM;
         }
         row_index = rows - 1;
         csv->data[row_index] = tokenized_line;
+        for (int i=0; i<rows; i++) {
+            for (int j=0; j<cols; j++) {
+                DEBUG_PRINT("csv->data[%d][%d]:%s, ", i, j, csv->data[i][j]);
+            }
+        }
         csv->columns = cols;
         csv->rows = rows;
     }
@@ -174,7 +180,7 @@ char **tokenizer(char *line, int *cols)
 
     column_num = 0;
     while (*current_ptr != '\0') {
-        int  curr_word_limit_size = DEFAULT_WORD_SIZE - 1; /* ヌル文字分-1 */
+        int  curr_word_limit_size = DEFAULT_WORD_SIZE;
         char *element_buffer = (char*)malloc(DEFAULT_WORD_SIZE); /* 要素を格納するメモリの確保 */
         
         if (element_buffer == NULL) {
@@ -187,13 +193,9 @@ char **tokenizer(char *line, int *cols)
         /* ヌル文字で初期化 */
         memset(element_buffer, '\0', DEFAULT_WORD_SIZE);
         if (column_num >= column_num_thresh) {
-            printf("column size over default value\n");
             column_num_thresh += DEFAULT_COLUMN_NUM;
             /* カラム数がデフォルトサイズより大きくなった場合メモリを拡張する */
-            printf("new row_ptr length: %d\n", column_num_thresh);
-            printf("BEFORE HOGE\n");
             char **tmp = (char **)realloc(row_ptr, column_num_thresh * sizeof(char *));
-            printf("AFTER HOGE\n");
             if (tmp == NULL) {
                 fprintf(stderr, "memory allocation failed.\n");
                 /* 既に確保した要素のメモリを解放 */
@@ -219,9 +221,10 @@ char **tokenizer(char *line, int *cols)
         word_index = 0;
         while (!parse_complete_flag && *current_ptr != '\0') {
             /* 要素の文字列を格納するメモリ領域の動的確保 */
-            if ((strlen(element_buffer)) >= (curr_word_limit_size)) { 
+            if ((strlen(element_buffer)+1) >= curr_word_limit_size) { /* null文字分+1する */
                 /* ヌル文字が上書きされる前にバッファの拡張を行う(strlen()の動作が\0が存在しない場合の動作は未定義のため) */
-                char *tmp = (char*)realloc(element_buffer, strlen(element_buffer) + DEFAULT_WORD_SIZE);
+                DEBUG_PRINT("strlen(element_buffer):%ld element_buffer:%s\n", strlen(element_buffer), element_buffer);
+                char *tmp = (char*)realloc(element_buffer, (strlen(element_buffer) + 1 + DEFAULT_WORD_SIZE)); /* null文字分+1 */
                 if (tmp == NULL) {
                     fprintf(stderr, "memory allocation failed.\n");
                     /* エラー処理とメモリの解放 */
@@ -232,7 +235,8 @@ char **tokenizer(char *line, int *cols)
                     break;
                 }
                 element_buffer = tmp;
-                curr_word_limit_size = strlen(element_buffer); /* ヌル文字文+1する */
+                curr_word_limit_size = strlen(element_buffer) + 1 + DEFAULT_WORD_SIZE;
+                memset(element_buffer+strlen(element_buffer)+1, '\0', DEFAULT_WORD_SIZE);
             }
             /* パース処理 */
             if ((*current_ptr != '"') && (*current_ptr != ',')) {
@@ -280,8 +284,9 @@ char **tokenizer(char *line, int *cols)
             return row_ptr;
         }
         element_buffer = tmp;
+        DEBUG_PRINT("parsed token:%s\n", element_buffer);
         row_ptr[column_num] = element_buffer;
-        printf("column index: %d element: %s\n", column_num, row_ptr[column_num]);
+
         ++column_num;
     }
     *cols = column_num;
