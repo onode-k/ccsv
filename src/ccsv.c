@@ -1,3 +1,7 @@
+/**
+ * @file ccsv.c
+ * @brief This file contains main logic implementation of the ccsv library
+ */
 #ifndef INTERNAL_HELPERS_H
 #define INTERNAL_HELPERS_H
 #include <stdio.h>
@@ -7,7 +11,27 @@
 #include "ccsv.h"
 #endif
 
-#ifdef DEBUG
+/**
+ * @brief private function related to memory deallocation used in internal processes.
+ * @param [in] element_buffer : Pointer to a char where the CSV token is stored.
+ * @param [in] row_ptr : Pointer to pointer to a char that stores pointers to tokens of a CSV row.
+ * @param [in] column_num : The number of columns in the CSV file.
+ * @return This function does not return a value.
+ */
+static void memory_free_csv_line(char *element_buffer, char **row_ptr, int column_num);
+
+/**
+ * @brief A private function to split a line of CSV data into token.
+ * @param [in] line : A pointer to char array containing a single line of CSV data from the CSV file.
+ * @param [out] cols : A pointer to an int that stores the number of columns.
+ * @return A pointer to pointer to a char, which stores pointer to the tokenized elements of the CSV.
+ *         Returns NULL if parsing failed.
+ */
+static char **tokenizer(char *line, int *cols);
+
+
+
+
 void debug_csv_stdout(CsvStruct *csv)
 {
     printf("column: %d\n", csv->columns);
@@ -19,7 +43,6 @@ void debug_csv_stdout(CsvStruct *csv)
         printf("\n");
     }
 }
-#endif
 
 void memory_free_csv_struct(CsvStruct *csv)
 {
@@ -139,11 +162,6 @@ void csv_read(char *filename, CsvStruct *csv)
         }
         row_index = rows - 1;
         csv->data[row_index] = tokenized_line;
-        for (int i=0; i<rows; i++) {
-            for (int j=0; j<cols; j++) {
-                DEBUG_PRINT("csv->data[%d][%d]:%s, ", i, j, csv->data[i][j]);
-            }
-        }
         csv->columns = cols;
         csv->rows = rows;
     }
@@ -159,7 +177,8 @@ void csv_read(char *filename, CsvStruct *csv)
     fclose(input_file);
     return;
 }
-char **tokenizer(char *line, int *cols)
+
+static char **tokenizer(char *line, int *cols)
 {
     char *current_ptr;
     char **row_ptr;
